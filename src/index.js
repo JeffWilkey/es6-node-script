@@ -1,27 +1,46 @@
 /* Script Entry */
 import { MongoClient } from 'mongodb';
-import { dbUrl } from '../config';
+import { dbUrlEU, dbUrlUK, dbUrlAU } from '../config';
 
-const client = new MongoClient(dbUrl, { useUnifiedTopology: true });
+const client = new MongoClient(dbUrlAU, { useUnifiedTopology: true });
 
 async function run() {
   try {
     await client.connect();
 
-    const subscriptions = client.db('production').collection('subscriptions');
+    const Subscription = client.db('production').collection('subscriptions');
 
-    subscriptions.updateMany(
-      {
-        'lineItem.sku': 'MAN-TR2-RB',
-      },
-      {
-        $set: {
-          'lineItem.sku': 'MAN-K-RBA',
-          'lineItem.variantId':
-            'Z2lkOi8vc2hvcGlmeS9Qcm9kdWN0VmFyaWFudC8zNDIzOTA5MDY1NTM2OA==',
-        },
+    const cursor = await Subscription.find({
+      $or: [
+        { 'lineItem.currency': null },
+        { 'lineItem.currency': { $exists: false } },
+        { 'lineItem.quantity': { $exists: false } },
+        { 'lineItem.quantity': null },
+      ],
+    });
+    const count = await cursor.count();
+
+    console.log(count);
+
+    const subscriptions = await cursor.toArray();
+
+    for (const subscription of subscriptions) {
+      try {
+        await Subscription.updateOne(
+          { _id: subscription._id },
+          {
+            $set: {
+              'lineItem.quantity': 1,
+              'lineItem.currency': 'AUD',
+            },
+          }
+        );
+
+        console.log(subscription._id + ' updated');
+      } catch (err) {
+        console.error(err);
       }
-    );
+    }
   } catch (err) {
     console.error(err);
   }
